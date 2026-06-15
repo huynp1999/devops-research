@@ -1,2 +1,0 @@
-# devops-research
-DevOps Research

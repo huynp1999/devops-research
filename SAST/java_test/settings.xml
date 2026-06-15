@@ -1,0 +1,152 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+    <pluginGroups>
+        <pluginGroup>org.sonarsource.scanner.maven</pluginGroup>
+    </pluginGroups>
+    <activeProfiles>
+        <activeProfile>backbase</activeProfile>
+    </activeProfiles>
+    <profiles>
+        <profile>
+            <id>sonar</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <!-- Optional URL to server. Default value is http://localhost:9000 -->
+                <sonar.host.url>
+                    https://sonarqube-dso.techcombank.com.vn
+                </sonar.host.url>
+            </properties>
+        </profile>
+        <profile>
+            <id>backbase</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+
+            <repositories>
+                <repository>
+                    <id>TCB Mirror Artifact Repository</id>
+                    <url>https://nexus-dso.techcombank.com.vn/repository/maven-public/</url>
+                </repository>
+                <repository>
+                    <id>TCB Release Repository</id>
+                    <url>https://nexus-dso.techcombank.com.vn/repository/maven-releases/</url>
+                </repository>
+                <repository>
+                    <id>QA Repository</id>
+                    <url>https://nexus-dso.techcombank.com.vn/repository/maven-qa-hosted/</url>
+                </repository>
+                <repository>
+                    <id>mvnrepository</id>
+                    <url>https://repo1.maven.org/maven2</url>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                    <releases>
+                        <enabled>true</enabled>
+                    </releases>
+                </repository>
+
+                <!-- From DevSecOps 25Jan2021 -->
+                <repository>
+                    <id>backbase-proxy</id>
+                    <url>https://nexus-dev.techcombank.com.vn/repository/maven-backbase-proxy/</url>
+                </repository>
+            </repositories>
+
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>TCB Release Repository</id>
+                    <url>https://nexus-dso.techcombank.com.vn/repository/maven-releases/</url>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>TCB Mirror Artifact Repository</id>
+                    <url>https://nexus-dso.techcombank.com.vn/repository/maven-public/</url>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>Backbase Artifact Repository</id>
+                    <url>https://repo.backbase.com/repo/</url>
+                </pluginRepository>
+
+
+                <!-- From DevSecOps 25Jan2021 -->
+                <pluginRepository>
+                    <id>Backbase Repository</id>
+                    <url>https://nexus-dev.techcombank.com.vn/repository/maven-backbase-proxy/</url>
+                </pluginRepository>
+
+
+            </pluginRepositories>
+        </profile>
+    </profiles>
+    <servers>
+        <server>
+            <id>Backbase Artifact Repository</id>
+            <username>techcombank0930</username>
+            <password>2ZjJhODRjOWRmMzkyODZj</password>
+            <configuration>
+                <httpConfiguration>
+                    <all>
+                        <readTimeout>200000</readTimeout>
+                        <connectionTimeout>60000</connectionTimeout>
+                    </all>
+                </httpConfiguration>
+            </configuration>
+        </server>
+        <server>
+            <id>QA Repository</id>
+            <username>ocp-test-env-user</username>
+            <password>tcb@2020</password>
+            <configuration>
+                <httpConfiguration>
+                    <all>
+                        <readTimeout>200000</readTimeout>
+                        <connectionTimeout>60000</connectionTimeout>
+                    </all>
+                </httpConfiguration>
+            </configuration>
+        </server>
+        <server>
+            <id>TCB Release Repository</id>
+            <username>omni-ro</username>
+            <password>7cDqDSTeeVtq7H</password>
+            <configuration>
+                <httpConfiguration>
+                    <all>
+                        <readTimeout>200000</readTimeout>
+                        <connectionTimeout>60000</connectionTimeout>
+                    </all>
+                </httpConfiguration>
+            </configuration>
+        </server>
+        <server>
+            <id>TCB Mirror Artifact Repository</id>
+            <username>omni-ro</username>
+            <password>7cDqDSTeeVtq7H</password>
+            <configuration>
+                <httpConfiguration>
+                    <all>
+                        <readTimeout>200000</readTimeout>
+                        <connectionTimeout>60000</connectionTimeout>
+                    </all>
+                </httpConfiguration>
+            </configuration>
+        </server>
+        <server>
+            <id>Backbase Repository</id>
+            <username>techcombank0930</username>
+            <password>2ZjJhODRjOWRmMzkyODZj</password>
+            <configuration>
+                <httpConfiguration>
+                    <all>
+                        <readTimeout>200000</readTimeout>
+                        <connectionTimeout>60000</connectionTimeout>
+                    </all>
+                </httpConfiguration>
+            </configuration>
+        </server>
+    </servers>
+</settings> 

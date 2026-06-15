@@ -1,0 +1,211 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: test-app
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: test-app
+  labels:
+    app: test-app
+    tier: frontend
+data:
+  APP_ENV: "production"
+  APP_VERSION: "1.2.0"
+  DB_HOST: "postgresql-svc"
+  DB_PORT: "5432"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+  namespace: test-app
+  labels:
+    app: test-app
+type: Opaque
+stringData:
+  DB_PASSWORD: "mysecret"
+  API_KEY: "demo-api-key-12345"
+---
+# Nginx + PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginx-pvc
+  namespace: test-app
+  labels:
+    app: nginx-app
+    tier: frontend
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-app
+  namespace: test-app
+  labels:
+    app: nginx-app
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nginx-app
+  template:
+    metadata:
+      labels:
+        app: nginx-app
+        tier: frontend
+      annotations:
+        backup.velero.io/backup-volumes: html-storage
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html-storage
+          mountPath: /usr/share/nginx/html
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+      volumes:
+      - name: html-storage
+        persistentVolumeClaim:
+          claimName: nginx-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-svc
+  namespace: test-app
+  labels:
+    app: nginx-app
+    tier: frontend
+spec:
+  selector:
+    app: nginx-app
+  ports:
+  - port: 80
+    targetPort: 80
+---
+# PostgreSQL + PVC + Hooks
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-pvc
+  namespace: test-app
+  labels:
+    app: postgresql
+    tier: backend
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-backup-pvc
+  namespace: test-app
+  labels:
+    app: postgresql
+    tier: backend
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: test-app
+  labels:
+    app: postgresql
+    tier: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+        tier: backend
+      annotations:
+        # Pre-backup hook: dump database trước khi backup để đảm bảo consistency
+        pre.hook.backup.velero.io/command: '["/bin/bash", "-c", "PGPASSWORD=$POSTGRES_PASSWORD pg_dump -U postgres -d appdb > /backup/dump.sql && echo Hook executed at $(date) > /backup/hook.log"]'
+        pre.hook.backup.velero.io/container: postgresql
+        pre.hook.backup.velero.io/timeout: "60s"
+        # Post-backup hook: simple log
+        post.hook.backup.velero.io/command: '["/bin/bash", "-c", "echo Backup completed at $(date) >> /backup/hook.log"]'
+        post.hook.backup.velero.io/container: postgresql
+        # Annotate volumes to backup
+        backup.velero.io/backup-volumes: pgdata,backup
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:15-alpine
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "mysecret"
+        - name: POSTGRES_DB
+          value: "appdb"
+        - name: PGDATA
+          value: "/var/lib/postgresql/data/pgdata"
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: pgdata
+          mountPath: /var/lib/postgresql/data
+        - name: backup
+          mountPath: /backup
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-U", "postgres"]
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: pg-pvc
+      - name: backup
+        persistentVolumeClaim:
+          claimName: pg-backup-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql-svc
+  namespace: test-app
+  labels:
+    app: postgresql
+    tier: backend
+spec:
+  selector:
+    app: postgresql
+  ports:
+  - port: 5432
+    targetPort: 5432

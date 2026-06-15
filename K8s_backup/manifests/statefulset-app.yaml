@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-headless
+  namespace: test-app
+  labels:
+    app: web-sts
+    tier: stateful
+spec:
+  clusterIP: None          # headless
+  selector:
+    app: web-sts
+  ports:
+  - port: 80
+    name: web
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+  namespace: test-app
+  labels:
+    app: web-sts
+    tier: stateful
+spec:
+  serviceName: web-headless
+  replicas: 3
+  podManagementPolicy: OrderedReady   # khởi động tuần tự web-0 -> web-1 -> web-2
+  selector:
+    matchLabels:
+      app: web-sts
+  template:
+    metadata:
+      labels:
+        app: web-sts
+        tier: stateful
+    spec:
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: app
+        image: alpine:3.20
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Write identity only the first time
+            if [ ! -f /data/identity.txt ]; then
+              echo "pod=$(hostname) created=$(date -u +%Y-%m-%dT%H:%M:%SZ) uid=$(cat /proc/sys/kernel/random/uuid)" > /data/identity.txt
+            fi
+            echo "Identity of $(hostname):"
+            cat /data/identity.txt
+            tail -f /dev/null
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: 20m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: web-sts
+        tier: stateful
+    spec:
+      accessModes: [ReadWriteOnce]
+      resources:
+        requests:
+          storage: 200Mi
