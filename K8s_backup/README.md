@@ -382,6 +382,93 @@ pod web-2: pod=web-2 created=2026-06-10T02:47:11Z uid=d6203eae-1092-4c15-961a-de
 
 Như vậy mỗi pod web-0/1/2 lấy lại đúng PVC + identity của chính nó. Thứ tự của StatefulSet và identity được giữ nguyên.
 
+## Test 3: So sánh Snapshot và Backup Full/Incremental
+
+Để lab với snapshot và incremental backup cần một storage backend cấp được block storage. MinIO chỉ có object storage nên không tận dụng được. Rook-Ceph là một lựa chọn phù hợp nhưng cho môi trường production, đối với lab 1 node thì Longhorn là phù hợp nhất vì lightweight, yêu cầu ít tài nguyên mà vẫn đủ tính năng Snapshot + incremental backup.
+
+Cơ chế cấp PVC đằng sau, Longhorn sẽ tạo một image tương ứng cho PVC tại `/var/lib/longhorn/` ở host. Sau đó Longhorn engine sẽ tạo ra một block device ảo để mount image này lên pod làm volume.
+
+Từ lớp block device ảo này Longhorn implement thêm snapshot controller, nhằm hỗ trợ:
+- **Snapshot**: lưu cục bộ trong `/var/lib/longhorn/`, snapshot sẽ có prefix `volume-snap-xxx.img`
+- **Backup**: lưu off-site trên S3, backup incremental sẽ chỉ upload block dữ liệu thay đổi so với backup trước lên S3 => tối ưu hiệu năng backup
+
+
+Cần setup Longhorn với cấu hình tích hợp với bucket MinIO từ trước. Sau đó tiến hành test với 3 phương thức:
+1. Velero + Kopia (file-level)
+2. Velero + CSI Snapshot + truyền snapshot lên bucket MinIO
+3. Longhorn Native Snapshot/Backup
+
+### Phương thức A: Velero + Kopia (file-level)
+
+0. Gen dữ liệu test
+1. Đo tổng dung lượng bucket trước khi backup
+2. Thực hiện backup
+```sh
+time velero backup create snap-a-full \
+  --include-namespaces snap-bench \
+  --default-volumes-to-fs-backup --wait
+```
+3. Đo tổng dung lượng bucket trước sau backup
+
+Thay đổi 25% dữ liệu và thực hiện lặp lại các bước trên từ đó tính ra backup incremental có thời gian nhanh hơn không? Dung lượng trên bucket có được dedup không?
+
+### Phương thức B: Velero + CSI Snapshot + truyền snapshot lên bucket MinIO
+
+
+0. Gen dữ liệu test
+1. Đo tổng dung lượng bucket trước khi backup
+2. Thực hiện backup
+```sh
+time velero backup create snap-b-full \
+  --include-namespaces snap-bench \
+  --snapshot-volumes --snapshot-move-data --wait
+```
+3. Đo tổng dung lượng bucket trước sau backup
+
+Thay đổi 25% dữ liệu và thực hiện lặp lại các bước trên từ đó tính ra backup incremental có thời gian nhanh hơn không? Dung lượng trên bucket có được dedup không?
+
+
+### Phương thức C: Longhorn Native Snapshot/Backup
+
+Snapshot ở lớp backend Longhorn là copy-on-write bản chất đã là một dạng incremental nên chỉ test tốc độ snapshot (dự đoán mất 1 đến 2 giây)
+
+```sh
+time kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: lh-snap-1
+  namespace: snap-bench
+spec:
+  volumeSnapshotClassName: longhorn-snapshot-vsc
+  source:
+    persistentVolumeClaimName: data-pvc
+
+# Check trạng thái snapshot
+kubectl get volumesnapshot lh-snap-1
+```
+
+Backup theo block, trên lý thuyết sẽ có block incremental, Longhorn sẽ chỉ backup phần block dữ liệu đã được thay đổi:
+
+0. Gen dữ liệu test và tạo VolumeSnapshotClass với type bak
+1. Đo tổng dung lượng bucket trước khi backup
+2. Thực hiện backup
+
+```sh
+kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: lh-backup-1
+  namespace: snap-bench
+spec:
+  volumeSnapshotClassName: longhorn-backup-vsc
+  source:
+    persistentVolumeClaimName: lh-data-pvc
+```
+3. Đo tổng dung lượng bucket trước sau backup
+
+Thay đổi 25% dữ liệu và thực hiện lặp lại các bước trên từ đó tính ra backup incremental có thời gian nhanh hơn không? Dung lượng trên bucket có được dedup không?
 
 ### 6. Một số lưu ý
 
